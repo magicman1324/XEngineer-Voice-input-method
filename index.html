@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1F4E79">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>语音输入法 · 同声传译</title>
+    <meta name="description" content="跨语言沟通同传字幕工具 - 边说边译，实时双语字幕">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+
+    <!-- Preconnect to API domains -->
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://openspeech.bytedance.com">
+    <link rel="preconnect" href="https://ark.cn-beijing.volces.com">
+    <link rel="dns-prefetch" href="https://openspeech.bytedance.com">
+    <link rel="dns-prefetch" href="https://ark.cn-beijing.volces.com">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+                    }
+                }
+            }
+        }
+        // Auto dark mode
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark')
+        }
+    </script>
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div id="app" class="min-h-screen flex flex-col max-w-lg mx-auto relative">
+
+        <!-- ====== Header ====== -->
+        <header class="flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 sticky top-0 z-10">
+            <h1 class="text-base font-semibold tracking-tight">语音输入法</h1>
+            <div class="flex items-center gap-2 text-xs text-gray-400">
+                <span id="status-indicator" class="inline-block w-2 h-2 rounded-full bg-gray-300"></span>
+                <span id="status-text">就绪</span>
+            </div>
+        </header>
+
+        <!-- ====== Main Content ====== -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+
+            <!-- Target Language Panel (Upper) -->
+            <section id="target-panel" class="flex-[3] overflow-y-auto p-4 bg-white dark:bg-gray-800 mx-2 mt-2 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <span id="lang-target" class="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1 rounded-full">EN</span>
+                    <div class="flex items-center gap-1">
+                        <button id="copy-btn" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="复制全部" aria-label="复制翻译结果">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                        </button>
+                        <button id="tts-btn" class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="朗读全部" aria-label="朗读翻译结果">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M6.5 8.77l5.5-4.27v15L6.5 15.23H3v-6.5h3.5z"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="target-text" class="text-base md:text-lg leading-relaxed min-h-[4rem] whitespace-pre-wrap break-words">
+                    <span class="text-gray-300 dark:text-gray-600 text-sm">翻译结果将显示在这里</span>
+                </div>
+            </section>
+
+            <!-- Divider -->
+            <div class="flex items-center gap-2 px-6 my-1">
+                <div class="flex-1 h-px bg-gray-100 dark:bg-gray-700"></div>
+                <button id="clear-btn" class="flex-shrink-0 p-1 text-gray-300 hover:text-gray-500 dark:hover:text-gray-400 transition-colors" title="清空全部" aria-label="清空全部">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+                <div class="flex-1 h-px bg-gray-100 dark:bg-gray-700"></div>
+            </div>
+
+            <!-- Source Language Panel (Lower) -->
+            <section id="source-panel" class="flex-[2] overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-900/50 mx-2 rounded-2xl border border-gray-50 dark:border-gray-700/50">
+                <div class="flex items-center justify-between mb-3">
+                    <span id="lang-source" class="text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2.5 py-1 rounded-full">ZH</span>
+                    <span class="text-[10px] text-gray-400">实时识别</span>
+                </div>
+                <div id="source-text" class="text-sm md:text-base leading-relaxed min-h-[3rem] whitespace-pre-wrap break-words">
+                    <span class="text-gray-300 dark:text-gray-600 text-sm">点击下方麦克风开始语音输入...</span>
+                </div>
+                <div id="interim-text" class="text-sm md:text-base leading-relaxed mt-2 min-h-[1.5rem] text-gray-400"></div>
+            </section>
+
+            <!-- Volume Indicator -->
+            <div id="volume-bar" class="h-1 mx-2 mt-1 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 hidden">
+                <div class="h-full w-0 rounded-full transition-all duration-75 ease-linear" style="background:#22c55e"></div>
+            </div>
+        </main>
+
+        <!-- ====== Footer Controls ====== -->
+        <footer class="flex items-center justify-center gap-8 px-4 py-4 pb-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-t border-gray-100 dark:border-gray-700">
+            <button id="lang-switch-btn" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="切换语言" aria-label="切换语言">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m0 4a6 6 0 016 6m-4 0h8"/></svg>
+            </button>
+
+            <button id="mic-btn" class="mic-idle relative w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg active:scale-90 transition-all duration-150 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-300" aria-label="开始录音">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 hidden" id="recording-dot"></span>
+            </button>
+
+            <button id="lang-display-btn" class="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="当前语言对">
+                <span id="lang-display-source">ZH</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                <span id="lang-display-target">EN</span>
+            </button>
+        </footer>
+    </div>
+
+    <!-- ====== Toast ====== -->
+    <div id="toast" class="fixed bottom-28 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm text-white opacity-0 transition-all duration-300 pointer-events-none z-50 shadow-lg"></div>
+
+    <!-- ====== Language Modal ====== -->
+    <div id="lang-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-80 max-w-[90vw] shadow-2xl">
+            <h3 class="text-base font-semibold mb-1 text-gray-800 dark:text-gray-200">语言设置</h3>
+            <p class="text-xs text-gray-400 mb-4">选择源语言和目标语言</p>
+            <div class="mb-3">
+                <label class="text-xs text-gray-500 mb-1.5 block">源语言（我说的语言）</label>
+                <select id="modal-lang-source" class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-transparent dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"></select>
+            </div>
+            <div class="flex justify-center my-2">
+                <button id="modal-swap-btn" class="p-1.5 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="互换语言">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+                </button>
+            </div>
+            <div class="mb-5">
+                <label class="text-xs text-gray-500 mb-1.5 block">目标语言（翻译为）</label>
+                <select id="modal-lang-target" class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl bg-transparent dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"></select>
+            </div>
+            <div class="flex gap-2">
+                <button id="modal-cancel" class="flex-1 py-2 text-sm text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">取消</button>
+                <button id="modal-confirm" class="flex-1 py-2 text-sm text-white bg-blue-500 rounded-xl hover:bg-blue-600 transition-colors">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== Scripts ====== -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/vad.js"></script>
+    <script src="js/asr.js"></script>
+    <script src="js/translator.js"></script>
+    <script src="js/tts.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Initialize app on DOM ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const app = new App(CONFIG)
+            app.initialize()
+            // Expose for debugging
+            window.__app = app
+        })
+    </script>
+</body>
+</html>

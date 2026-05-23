@@ -1,0 +1,40 @@
+.waveform-bar {
+    transition: height 0.05s ease;
+}
+.text-interim { color: #9ca3af; }
+.text-final { color: #1f2937; }
+.dark .text-final { color: #e5e7eb; }
+
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+    50% { box-shadow: 0 0 0 16px rgba(59, 130, 246, 0); }
+}
+.mic-recording { animation: mic-pulse 1.5s infinite; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.text-fade-in { animation: fadeIn 0.3s ease-out; }
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.slide-up { animation: slideUp 0.5s ease-out; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
+
+#source-text::-webkit-scrollbar,
+#target-text::-webkit-scrollbar { width: 4px; }
+#source-text::-webkit-scrollbar-thumb,
+#target-text::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+@media (max-width: 360px) {
+    #app { font-size: 14px; }
+    #mic-btn { width: 56px; height: 56px; }
+}
+@media (min-width: 1024px) {
+    #app { max-width: 480px; margin: 0 auto; }
+}
