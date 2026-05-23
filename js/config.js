@@ -1,0 +1,49 @@
+const CONFIG = {
+    api: {
+        asrWsUrl: 'wss://openspeech.bytedance.com/api/v1/ws',
+        asrAppid: '',
+        asrToken: '',
+        translateApiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+        translateApiKey: '',
+        translateModel: 'doubao-1.5-pro-256k',
+        ttsApiUrl: 'https://openspeech.bytedance.com/api/v1/tts',
+        ttsAppid: '',
+        ttsToken: '',
+    },
+    vad: {
+        silenceThreshold: -45,
+        silenceTimeout: 800,
+        minSpeechDuration: 150,
+        minSegmentDuration: 300,
+        frameSize: 2048,
+        dynamicThreshold: true,
+        noiseSampleDuration: 500,
+        thresholdMargin: 15,
+    },
+    audio: {
+        sampleRate: 16000,
+        frameDuration: 200,
+        channelCount: 1,
+        bitsPerSample: 16,
+    },
+    languages: {
+        source: [
+            { code: 'zh', name: '中文' },
+            { code: 'en', name: 'English' },
+            { code: 'ja', name: '日本語' },
+        ],
+        target: [
+            { code: 'en', name: 'English' },
+            { code: 'zh', name: '中文' },
+            { code: 'ja', name: '日本語' },
+            { code: 'ko', name: '한국어' },
+            { code: 'fr', name: 'Français' },
+        ],
+        default: { source: 'zh', target: 'en' },
+    },
+    ui: {
+        maxHistoryItems: 50,
+        autoScroll: true,
+        showVolumeIndicator: true,
+    },
+}
