@@ -152,17 +152,68 @@
     <script src="js/audio.js"></script>
     <script src="js/vad.js"></script>
     <script src="js/asr.js"></script>
-    <script src="js/translator.js"></script>
-    <script src="js/tts.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
+    <!-- PR-5~PR-6 scripts not yet loaded: translator.js, tts.js, ui.js, app.js -->
     <script>
-        // Initialize app on DOM ready
+        // PR-4 test harness: wire audio → VAD → ASR, log results to console
         document.addEventListener('DOMContentLoaded', () => {
-            const app = new App(CONFIG)
-            app.initialize()
+            const audio = new AudioService(CONFIG)
+            const vad = new VAD(CONFIG)
+            const asr = new ASRService(CONFIG)
+
+            const micBtn = document.getElementById('mic-btn')
+            const dot = document.getElementById('recording-dot')
+            let active = false
+
+            // Wire audio → VAD (volume)
+            audio.onVolumeChange = (v) => vad.process(v)
+
+            // Wire audio → ASR (raw PCM)
+            audio.onPCMData = (pcm) => asr.sendAudio(pcm)
+
+            // Wire VAD → ASR (segment end)
+            vad.onSpeechStart = () => console.log('[Test] Speech started')
+            vad.onSpeechEnd = () => { console.log('[Test] Speech ended'); asr.endSegment() }
+
+            // Wire ASR → console
+            asr.onConnected = () => console.log('[Test] ASR connected, listening...')
+            asr.onFinalResult = (text) => {
+                console.log('[Test] ASR result:', text)
+                document.getElementById('source-text').innerText = text
+            }
+            asr.onError = (e) => console.error('[Test] ASR error:', e)
+
+            micBtn.addEventListener('click', async () => {
+                if (active) {
+                    audio.stopRecording()
+                    asr.endSegment()
+                    asr.disconnect()
+                    audio.release()
+                    vad.reset()
+                    micBtn.classList.remove('mic-active'); micBtn.classList.add('mic-idle')
+                    dot.classList.add('hidden')
+                    document.getElementById('volume-bar').classList.add('hidden')
+                    document.getElementById('source-text').innerText = '点击下方麦克风开始语音输入...'
+                    active = false
+                    return
+                }
+                try {
+                    await audio.requestMicrophone()
+                    audio.initAudioPipeline()
+                    await asr.connect()
+                    audio.startRecording()
+                    active = true
+                    micBtn.classList.remove('mic-idle'); micBtn.classList.add('mic-active')
+                    dot.classList.remove('hidden')
+                    document.getElementById('volume-bar').classList.remove('hidden')
+                    document.getElementById('source-text').innerText = ''
+                } catch (err) {
+                    console.error('[Test] Start failed:', err)
+                }
+            })
+
             // Expose for debugging
-            window.__app = app
+            window.__audio = audio; window.__vad = vad; window.__asr = asr
+            console.log('[Test] PR-4 harness ready')
         })
     </script>
 </body>
