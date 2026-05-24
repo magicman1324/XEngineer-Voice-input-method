@@ -1,8 +1,9 @@
 const CONFIG = {
     api: {
-        asrWsUrl: 'wss://openspeech.bytedance.com/api/v1/ws',
-        asrAppid: '',
-        asrToken: '',
+        asrWsUrl: 'ws://localhost:8765',
+        asrAppid: '8012821088',
+        asrToken: 'yKVyiACnoM69nmHXq8HVJsqz8ZOYVoWW',
+        asrResourceId: 'volc.bigasr.sauc.duration',
         translateApiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
         translateApiKey: '',
         translateModel: 'doubao-1.5-pro-256k',
