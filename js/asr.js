@@ -153,6 +153,7 @@ class ASRService {
     _handleMessage(data) {
         if (data instanceof ArrayBuffer) {
             const chunk = new Uint8Array(data)
+            const prevLen = this._recvBuffer ? this._recvBuffer.length : 0
             if (!this._recvBuffer) {
                 this._recvBuffer = chunk
             } else {
@@ -161,6 +162,7 @@ class ASRService {
                 tmp.set(chunk, this._recvBuffer.length)
                 this._recvBuffer = tmp
             }
+            console.log('[ASR] recv chunk:', chunk.length, 'buf:', prevLen, '→', this._recvBuffer.length)
             this._parseBuffer()
         } else if (typeof data === 'string') {
             try { this._processResult(JSON.parse(data)) }
@@ -226,7 +228,11 @@ class ASRService {
     _parseJSONPayload(payload) {
         const text = new TextDecoder().decode(payload)
         const jsonStart = text.indexOf('{')
-        if (jsonStart < 0) return
+        if (jsonStart < 0) {
+            if (payload.length > 0) console.log('[ASR] _parseJSONPayload: no JSON in', payload.length, 'bytes, hex:', Array.from(payload.slice(0, 8)).map(b => b.toString(16).padStart(2,'0')).join(' '))
+            return
+        }
+        console.log('[ASR] _parseJSONPayload attempting parse, len:', payload.length, 'preview:', text.substring(jsonStart, jsonStart + 40))
         try {
             this._processResult(JSON.parse(text.substring(jsonStart)))
         } catch (e) {
