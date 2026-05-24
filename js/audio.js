@@ -2,13 +2,12 @@ class AudioService {
     constructor(config) {
         this.config = config
         this.stream = null
-        this.mediaRecorder = null
         this.audioContext = null
         this.analyser = null
         this.source = null
-        this.audioChunks = []
+        this.processor = null
         this.isRecording = false
-        this.onAudioData = null
+        this.onPCMData = null
         this.onVolumeChange = null
         this.onError = null
         this.animationId = null
@@ -23,79 +22,81 @@ class AudioService {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                }
+                },
             })
             return true
         } catch (err) {
-            if (err.name === 'NotAllowedError') throw new Error('麦克风权限被拒绝')
-            if (err.name === 'NotFoundError') throw new Error('未检测到麦克风设备')
-            throw new Error(`麦克风访问失败: ${err.message}`)
+            if (err.name === 'NotAllowedError') throw new Error('Microphone permission denied')
+            if (err.name === 'NotFoundError') throw new Error('No microphone found')
+            throw new Error('Microphone access failed: ' + err.message)
         }
     }
 
     initAudioPipeline() {
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: this.config.audio.sampleRate,
+        })
+
         this.source = this.audioContext.createMediaStreamSource(this.stream)
+        this.audioContext.resume()
+
+        if (this.audioContext.sampleRate !== this.config.audio.sampleRate) {
+            console.warn('[Audio] Sample rate:', this.audioContext.sampleRate,
+                '(ASR expects', this.config.audio.sampleRate, 'Hz)')
+        }
+
+        // Analyser for VAD volume
         this.analyser = this.audioContext.createAnalyser()
         this.analyser.fftSize = this.config.vad.frameSize
         this.analyser.smoothingTimeConstant = 0.8
         this.source.connect(this.analyser)
 
-        const mimeType = this.getSupportedMimeType()
-        this.mediaRecorder = new MediaRecorder(this.stream, { mimeType })
-        this.mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                this.audioChunks.push(event.data)
-                const volume = this.getCurrentVolume()
-                this.onAudioData && this.onAudioData(event.data, volume)
+        // ScriptProcessorNode captures raw PCM (Float32 → Int16)
+        this.processor = this.audioContext.createScriptProcessor(2048, 1, 1)
+        this.processor.onaudioprocess = (event) => {
+            if (!this.isRecording) return
+            const input = event.inputBuffer.getChannelData(0)
+            const pcm = new Int16Array(input.length)
+            for (let i = 0; i < input.length; i++) {
+                const s = Math.max(-1, Math.min(1, input[i]))
+                pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
             }
+            this.onPCMData?.(pcm.buffer)
         }
-    }
-
-    getSupportedMimeType() {
-        for (const type of ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']) {
-            if (MediaRecorder.isTypeSupported(type)) return type
-        }
-        return ''
+        this.source.connect(this.processor)
+        this.processor.connect(this.audioContext.destination)
     }
 
     startRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state === 'inactive') {
-            this.audioChunks = []
-            this.mediaRecorder.start(200)
-            this.isRecording = true
-            this.startVolumeMonitoring()
-        }
+        this.isRecording = true
+        this.startVolumeMonitoring()
     }
 
     stopRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-            this.mediaRecorder.stop()
-            this.isRecording = false
-            this.stopVolumeMonitoring()
-        }
+        this.isRecording = false
+        this.stopVolumeMonitoring()
     }
 
     getCurrentVolume() {
         if (!this.analyser) return -100
         const dataArray = new Uint8Array(this.analyser.frequencyBinCount)
         this.analyser.getByteTimeDomainData(dataArray)
-        let sum = 0
+        let sumSquares = 0
         for (let i = 0; i < dataArray.length; i++) {
-            const value = (dataArray[i] - 128) / 128
-            sum += value * value
+            const v = (dataArray[i] - 128) / 128
+            sumSquares += v * v
         }
-        const rms = Math.sqrt(sum / dataArray.length)
-        return rms > 0 ? Math.max(-100, Math.min(0, 20 * Math.log10(rms))) : -100
+        const rms = Math.sqrt(sumSquares / dataArray.length)
+        return rms > 0 ? Math.max(-100, 20 * Math.log10(rms)) : -100
     }
 
     startVolumeMonitoring() {
-        const monitor = () => {
+        const tick = () => {
             if (!this.isRecording) return
-            this.onVolumeChange && this.onVolumeChange(this.getCurrentVolume())
-            this.animationId = requestAnimationFrame(monitor)
+            this.onVolumeChange?.(this.getCurrentVolume())
+            this.animationId = requestAnimationFrame(tick)
         }
-        monitor()
+        tick()
     }
 
     stopVolumeMonitoring() {
@@ -105,7 +106,17 @@ class AudioService {
 
     release() {
         this.stopRecording()
-        if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null }
-        if (this.audioContext) { this.audioContext.close(); this.audioContext = null }
+        if (this.processor) {
+            this.processor.disconnect()
+            this.processor = null
+        }
+        if (this.stream) {
+            this.stream.getTracks().forEach((t) => t.stop())
+            this.stream = null
+        }
+        if (this.audioContext) {
+            this.audioContext.close()
+            this.audioContext = null
+        }
     }
 }
