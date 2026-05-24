@@ -188,7 +188,13 @@ class ASRService {
                 } else if (msgType === 0x9) {
                     this._parseJSONPayload(payload)
                 }
-                offset += 8 + payloadSize
+                offset += 8
+                // v3 quirk: server may send trivial payloadSize=1 frame
+                // where continuation [4-byte-size][JSON] starts at offset+8
+                if (offset < buf.length && (buf[offset] >> 4) === 0) {
+                    continue // let version=0 continuation branch handle it
+                }
+                offset += payloadSize
                 continue
             }
 
