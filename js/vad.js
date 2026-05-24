@@ -7,34 +7,44 @@ class VAD {
         this.noiseFloor = -50
         this.noiseSamples = []
         this.isCalibrating = true
+        this._lastTime = 0
         this.onSpeechStart = null
         this.onSpeechEnd = null
         this.onSegmentReady = null
     }
 
     process(volume) {
+        const now = performance.now()
+        if (this._lastTime === 0) {
+            this._lastTime = now
+            this.calibrateNoiseFloor(volume)
+            return
+        }
+        const dt = (now - this._lastTime) / 1000
+        this._lastTime = now
+
         this.calibrateNoiseFloor(volume)
         const threshold = this.getThreshold()
         const isSpeech = volume > threshold
 
         if (isSpeech) {
             this.silenceTime = 0
-            this.speechDuration += this.getFrameDuration()
-            if (!this.isSpeaking) {
+            this.speechDuration += dt
+            if (!this.isSpeaking && this.speechDuration >= this.config.minSpeechDuration / 1000) {
                 this.isSpeaking = true
-                this.onSpeechStart && this.onSpeechStart()
+                this.onSpeechStart?.()
             }
         } else {
             if (this.isSpeaking) {
-                this.silenceTime += this.getFrameDuration()
+                this.silenceTime += dt
                 if (this.silenceTime >= this.config.silenceTimeout / 1000) {
                     if (this.speechDuration >= this.config.minSegmentDuration / 1000) {
-                        this.onSegmentReady && this.onSegmentReady()
+                        this.onSegmentReady?.()
                     }
                     this.isSpeaking = false
                     this.silenceTime = 0
                     this.speechDuration = 0
-                    this.onSpeechEnd && this.onSpeechEnd()
+                    this.onSpeechEnd?.()
                 }
             }
         }
@@ -60,13 +70,12 @@ class VAD {
         return this.config.silenceThreshold
     }
 
-    getFrameDuration() { return this.config.frameSize / 16000 }
-
     reset() {
         this.isSpeaking = false
         this.silenceTime = 0
         this.speechDuration = 0
         this.noiseSamples = []
         this.isCalibrating = true
+        this._lastTime = 0
     }
 }
