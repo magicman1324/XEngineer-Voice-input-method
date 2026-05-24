@@ -6,6 +6,7 @@ class ASRService {
         this._authReject = null
         this._authTimer = null
         this._audioBuffer = []
+        this._recvBuffer = null
         this._isAuthReady = false
         this._pendingData = null
         this.onIntermediateResult = null
@@ -60,6 +61,7 @@ class ASRService {
                 this._authReject = reject
                 this._isAuthReady = false
                 this._audioBuffer = []
+                this._recvBuffer = null
                 this._pendingData = null
 
                 this.ws = new WebSocket(this.wsUrl)
@@ -150,14 +152,25 @@ class ASRService {
 
     _handleMessage(data) {
         if (data instanceof ArrayBuffer) {
-            this._handleBinary(new Uint8Array(data))
+            const chunk = new Uint8Array(data)
+            if (!this._recvBuffer) {
+                this._recvBuffer = chunk
+            } else {
+                const tmp = new Uint8Array(this._recvBuffer.length + chunk.length)
+                tmp.set(this._recvBuffer, 0)
+                tmp.set(chunk, this._recvBuffer.length)
+                this._recvBuffer = tmp
+            }
+            this._parseBuffer()
         } else if (typeof data === 'string') {
             try { this._processResult(JSON.parse(data)) }
             catch (e) { console.warn('[ASR] parse error:', e) }
         }
     }
 
-    _handleBinary(buf) {
+    _parseBuffer() {
+        const buf = this._recvBuffer
+        if (!buf) return
         let offset = 0
 
         while (offset + 8 <= buf.length) {
@@ -189,10 +202,10 @@ class ASRService {
                     this._parseJSONPayload(payload)
                 }
                 offset += 8
-                // v3 quirk: server may send trivial payloadSize=1 frame
+                // v3 quirk: server may send trivial payloadSize frame
                 // where continuation [4-byte-size][JSON] starts at offset+8
                 if (offset < buf.length && (buf[offset] >> 4) === 0) {
-                    continue // let version=0 continuation branch handle it
+                    continue
                 }
                 offset += payloadSize
                 continue
@@ -200,6 +213,13 @@ class ASRService {
 
             console.warn('[ASR] Unknown frame version:', version, 'at offset:', offset)
             break
+        }
+
+        // Trim consumed bytes
+        if (offset >= buf.length) {
+            this._recvBuffer = null
+        } else if (offset > 0) {
+            this._recvBuffer = buf.slice(offset)
         }
     }
 
@@ -261,6 +281,7 @@ class ASRService {
         this._authReject = null
         this._isAuthReady = false
         this._audioBuffer = []
+        this._recvBuffer = null
         this._pendingData = null
         if (this.ws) {
             this.ws.onclose = null
