@@ -153,7 +153,6 @@ class ASRService {
     _handleMessage(data) {
         if (data instanceof ArrayBuffer) {
             const chunk = new Uint8Array(data)
-            const prevLen = this._recvBuffer ? this._recvBuffer.length : 0
             if (!this._recvBuffer) {
                 this._recvBuffer = chunk
             } else {
@@ -162,91 +161,26 @@ class ASRService {
                 tmp.set(chunk, this._recvBuffer.length)
                 this._recvBuffer = tmp
             }
-            console.log('[ASR] recv chunk:', chunk.length, 'buf:', prevLen, '→', this._recvBuffer.length)
-            this._parseBuffer()
+            // Extract JSON directly — v3 always wraps responses in JSON
+            const text = new TextDecoder().decode(this._recvBuffer)
+            const jsonStart = text.indexOf('{')
+            if (jsonStart < 0) return
+            try {
+                const msg = JSON.parse(text.substring(jsonStart))
+                // Only clear buffer on successful parse
+                this._recvBuffer = null
+                if (msg.message && msg.code !== 0 && msg.code !== 1000) {
+                    this._handleError(msg)
+                } else {
+                    this._processResult(msg)
+                }
+            } catch (e) {
+                // Incomplete JSON — keep buffer, wait for more data
+            }
         } else if (typeof data === 'string') {
             try { this._processResult(JSON.parse(data)) }
             catch (e) { console.warn('[ASR] parse error:', e) }
         }
-    }
-
-    _parseBuffer() {
-        const buf = this._recvBuffer
-        if (!buf) return
-        let offset = 0
-
-        while (offset + 8 <= buf.length) {
-            const version = (buf[offset] >> 4) & 0x0F
-
-            if (version === 0) {
-                // v3 continuation: [4-byte-size][payload] without protocol header
-                if (offset + 4 > buf.length) break
-                const size = new DataView(buf.buffer, buf.byteOffset + offset, 4).getUint32(0, false)
-                if (offset + 4 + size > buf.length) break
-                const payload = buf.slice(offset + 4, offset + 4 + size)
-                this._parseJSONPayload(payload)
-                offset += 4 + size
-                continue
-            }
-
-            if (version === 1) {
-                const payloadSize = new DataView(buf.buffer, buf.byteOffset + offset + 4, 4).getUint32(0, false)
-                if (offset + 8 + payloadSize > buf.length) break
-
-                const msgType = (buf[offset + 1] >> 4) & 0x0F
-                const payload = buf.slice(offset + 8, offset + 8 + payloadSize)
-
-                console.log('[ASR] Frame msgType:', msgType, 'size:', payloadSize)
-
-                if (msgType === 0xF) {
-                    this._parseErrorPayload(payload)
-                } else if (msgType === 0x9) {
-                    this._parseJSONPayload(payload)
-                }
-                offset += 8
-                // v3 quirk: server may send trivial payloadSize frame
-                // where continuation [4-byte-size][JSON] starts at offset+8
-                if (offset < buf.length && (buf[offset] >> 4) === 0) {
-                    continue
-                }
-                offset += payloadSize
-                continue
-            }
-
-            console.warn('[ASR] Unknown frame version:', version, 'at offset:', offset)
-            break
-        }
-
-        // Trim consumed bytes
-        if (offset >= buf.length) {
-            this._recvBuffer = null
-        } else if (offset > 0) {
-            this._recvBuffer = buf.slice(offset)
-        }
-    }
-
-    _parseJSONPayload(payload) {
-        const text = new TextDecoder().decode(payload)
-        const jsonStart = text.indexOf('{')
-        if (jsonStart < 0) {
-            if (payload.length > 0) console.log('[ASR] _parseJSONPayload: no JSON in', payload.length, 'bytes, hex:', Array.from(payload.slice(0, 8)).map(b => b.toString(16).padStart(2,'0')).join(' '))
-            return
-        }
-        console.log('[ASR] _parseJSONPayload attempting parse, len:', payload.length, 'preview:', text.substring(jsonStart, jsonStart + 40))
-        try {
-            this._processResult(JSON.parse(text.substring(jsonStart)))
-        } catch (e) {
-            console.warn('[ASR] JSON parse error:', e)
-        }
-    }
-
-    _parseErrorPayload(payload) {
-        const text = new TextDecoder().decode(payload)
-        const jsonStart = text.indexOf('{')
-        if (jsonStart < 0) return
-        try {
-            this._handleError(JSON.parse(text.substring(jsonStart)))
-        } catch (e) { /* ignore */ }
     }
 
     _processResult(msg) {
