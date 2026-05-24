@@ -1,0 +1,23 @@
+{
+  "name": "xengineer",
+  "version": "1.0.0",
+  "description": "七牛云XEngineer-Voice input method",
+  "main": "proxy.js",
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/magicman1324/XEngineer-Voice-input-method.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/magicman1324/XEngineer-Voice-input-method/issues"
+  },
+  "homepage": "https://github.com/magicman1324/XEngineer-Voice-input-method#readme"
+}
