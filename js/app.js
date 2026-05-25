@@ -139,7 +139,11 @@ class App {
             console.error('[App] Start failed:', err)
             this.ui.setStatus('error')
             this.ui.showToast('启动失败: ' + err.message)
-            this._cleanup()
+            // Release any resources acquired before the failure
+            this.audio.stopRecording()
+            this.audio.release()
+            this.asr.disconnect()
+            this.vad.reset()
         }
     }
 
@@ -149,12 +153,7 @@ class App {
         this.asr.disconnect()
         this.audio.release()
         this.vad.reset()
-        this._cleanup()
         this.ui.reset()
         this.active = false
-    }
-
-    _cleanup() {
-        // Services that need explicit cleanup will handle it in their own methods
     }
 }
