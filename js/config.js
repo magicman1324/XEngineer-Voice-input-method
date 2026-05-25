@@ -4,7 +4,7 @@ const CONFIG = {
         asrAppid: '8012821088',
         asrToken: 'yKVyiACnoM69nmHXq8HVJsqz8ZOYVoWW',
         asrResourceId: 'volc.bigasr.sauc.duration',
-        translateApiUrl: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+        translateApiUrl: 'http://localhost:8766/translate',
         translateApiKey: 'yKVyiACnoM69nmHXq8HVJsqz8ZOYVoWW',
         translateModel: 'doubao-1.5-pro-256k',
         ttsApiUrl: 'https://openspeech.bytedance.com/api/v1/tts',

@@ -1,19 +1,23 @@
 /**
- * WebSocket proxy — needed because browser WebSocket API cannot set
- * custom HTTP headers required by Volcengine ASR v3/bigmodel.
+ * Local proxy — needed because browser WebSocket/HTTP APIs cannot set
+ * custom headers required by Volcengine services.
  *
- * Browser connects to ws://localhost:8765 (no headers needed).
- * Proxy forwards to v3/bigmodel with X-Api-* auth headers.
+ * WebSocket: ws://localhost:8765  →  v3/bigmodel ASR
+ * HTTP:      http://localhost:8766/translate  →  Doubao LLM API
  */
 
 const { WebSocketServer } = require('ws');
 const WebSocket = require('ws');
+const http = require('http');
+const https = require('https');
 
 const APP_ID = '8012821088';
 const TOKEN = 'yKVyiACnoM69nmHXq8HVJsqz8ZOYVoWW';
 const RESOURCE_ID = 'volc.bigasr.sauc.duration';
-const UPSTREAM = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel';
-const PORT = 8765;
+const ASR_UPSTREAM = 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel';
+const TRANSLATE_UPSTREAM = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+const WS_PORT = 8765;
+const HTTP_PORT = 8766;
 
 function validCode(code) {
     if (typeof code !== 'number' || code < 1000 || code > 4999 ||
@@ -21,13 +25,15 @@ function validCode(code) {
     return code;
 }
 
-const server = new WebSocketServer({ port: PORT });
-console.log('[Proxy] Listening on ws://localhost:' + PORT);
+// ==================== WebSocket Proxy (ASR) ====================
 
-server.on('connection', (client) => {
+const wsServer = new WebSocketServer({ port: WS_PORT });
+console.log('[Proxy] WS listening on ws://localhost:' + WS_PORT);
+
+wsServer.on('connection', (client) => {
     console.log('[Proxy] Client connected');
 
-    const upstream = new WebSocket(UPSTREAM, {
+    const upstream = new WebSocket(ASR_UPSTREAM, {
         headers: {
             'X-Api-App-Key': APP_ID,
             'X-Api-Access-Key': TOKEN,
@@ -46,13 +52,7 @@ server.on('connection', (client) => {
     });
 
     upstream.on('message', (data) => {
-        const size = Buffer.isBuffer(data) ? data.length : data.length;
-        console.log('[Proxy] Upstream msg, size:', size);
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(data);
-        } else {
-            console.log('[Proxy] Client not open, dropping upstream msg');
-        }
+        if (client.readyState === WebSocket.OPEN) client.send(data);
     });
 
     upstream.on('error', (err) => {
@@ -82,4 +82,60 @@ server.on('connection', (client) => {
         console.log('[Proxy] Client disconnected:', code, reason?.toString() || '');
         if (upstream.readyState === WebSocket.OPEN) upstream.close(validCode(code), reason);
     });
+});
+
+// ==================== HTTP Proxy (Translation) ====================
+
+const httpServer = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    if (req.method !== 'POST') {
+        res.writeHead(405);
+        res.end('Method not allowed');
+        return;
+    }
+
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+        console.log('[Proxy] HTTP translate request, body:', body.substring(0, 80) + '...');
+
+        // Pass through the client's Authorization header
+        const upstreamReq = https.request(TRANSLATE_UPSTREAM, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': req.headers.authorization || ('Bearer ' + TOKEN),
+            },
+        }, (upstreamRes) => {
+            let data = '';
+            upstreamRes.on('data', (chunk) => { data += chunk; });
+            upstreamRes.on('end', () => {
+                console.log('[Proxy] HTTP translate response:', upstreamRes.statusCode, data.substring(0, 120));
+                res.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+                res.end(data);
+            });
+        });
+
+        upstreamReq.on('error', (err) => {
+            console.error('[Proxy] HTTP upstream error:', err.message);
+            res.writeHead(502);
+            res.end(JSON.stringify({ error: 'Upstream error: ' + err.message }));
+        });
+
+        upstreamReq.write(body);
+        upstreamReq.end();
+    });
+});
+
+httpServer.listen(HTTP_PORT, () => {
+    console.log('[Proxy] HTTP listening on http://localhost:' + HTTP_PORT + '/translate');
 });
