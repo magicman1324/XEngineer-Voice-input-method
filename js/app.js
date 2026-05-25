@@ -56,6 +56,62 @@ class App {
         }
 
         this.ui.micBtn.addEventListener('click', () => this._toggle())
+
+        // Copy
+        this.ui.copyBtn.addEventListener('click', () => {
+            const text = this.ui.getTargetText()
+            if (!text) return
+            navigator.clipboard.writeText(text).then(
+                () => this.ui.showToast('已复制到剪贴板'),
+                () => this.ui.showToast('复制失败')
+            )
+        })
+
+        // Clear
+        this.ui.clearBtn.addEventListener('click', () => {
+            if (this.active) return
+            this.ui.setSourceText('点击下方麦克风开始语音输入...')
+            this.ui.setTargetText('翻译结果将显示在这里')
+            this.ui.setInterimText('')
+        })
+
+        // Language modal
+        this.ui.initLanguageModal(this.config.languages)
+        this.ui.setModalLanguages(this.sourceLang, this.targetLang)
+
+        const openModal = () => {
+            this.ui.setModalLanguages(this.sourceLang, this.targetLang)
+            this.ui.showLanguageModal()
+        }
+        this.ui.langSwitchBtn.addEventListener('click', openModal)
+        this.ui.langDisplayBtn.addEventListener('click', openModal)
+
+        this.ui.modalSwapBtn.addEventListener('click', () => {
+            const src = this.ui.modalLangSource.value
+            const tgt = this.ui.modalLangTarget.value
+            this.ui.modalLangSource.value = tgt
+            this.ui.modalLangTarget.value = src
+        })
+
+        this.ui.modalCancelBtn.addEventListener('click', () => this.ui.hideLanguageModal())
+
+        this.ui.modalConfirmBtn.addEventListener('click', async () => {
+            const newSource = this.ui.modalLangSource.value
+            const newTarget = this.ui.modalLangTarget.value
+            this.ui.hideLanguageModal()
+
+            if (newSource === this.sourceLang && newTarget === this.targetLang) return
+
+            this.sourceLang = newSource
+            this.targetLang = newTarget
+            this.ui.setLanguages(newSource, newTarget)
+
+            // Restart ASR if recording so language change takes effect
+            if (this.active) {
+                this.stop()
+                await this.start()
+            }
+        })
     }
 
     async _toggle() {

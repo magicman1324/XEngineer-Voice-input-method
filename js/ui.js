@@ -19,9 +19,40 @@ class UIManager {
         this.clearBtn = document.getElementById('clear-btn')
         this.langSwitchBtn = document.getElementById('lang-switch-btn')
         this.langDisplayBtn = document.getElementById('lang-display-btn')
+        this.langModal = document.getElementById('lang-modal')
+        this.modalLangSource = document.getElementById('modal-lang-source')
+        this.modalLangTarget = document.getElementById('modal-lang-target')
+        this.modalSwapBtn = document.getElementById('modal-swap-btn')
+        this.modalCancelBtn = document.getElementById('modal-cancel')
+        this.modalConfirmBtn = document.getElementById('modal-confirm')
 
         this._toastTimer = null
     }
+
+    initLanguageModal(languages) {
+        const render = (select, list) => {
+            select.innerHTML = ''
+            for (const lang of list) {
+                const opt = document.createElement('option')
+                opt.value = lang.code
+                opt.textContent = lang.name
+                select.appendChild(opt)
+            }
+        }
+        render(this.modalLangSource, languages.source)
+        render(this.modalLangTarget, languages.target)
+    }
+
+    setModalLanguages(sourceCode, targetCode) {
+        this.modalLangSource.value = sourceCode
+        this.modalLangTarget.value = targetCode
+    }
+
+    showLanguageModal() { this.langModal.classList.remove('hidden') }
+    hideLanguageModal() { this.langModal.classList.add('hidden') }
+
+    getSourceText() { return this.sourceText?.innerText || '' }
+    getTargetText() { return this.targetText?.innerText || '' }
 
     setStatus(state) {
         const states = {
