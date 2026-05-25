@@ -8,7 +8,8 @@ class ASRService {
         this._audioBuffer = []
         this._recvBuffer = null
         this._isAuthReady = false
-        this._pendingData = null
+        this._needFirst = true
+        this._segmentCount = 0
         this.onIntermediateResult = null
         this.onFinalResult = null
         this.onError = null
@@ -60,6 +61,8 @@ class ASRService {
                 this._authResolve = resolve
                 this._authReject = reject
                 this._isAuthReady = false
+                this._needFirst = true
+                this._segmentCount = 0
                 this._audioBuffer = []
                 this._recvBuffer = null
                 this._pendingData = null
@@ -135,15 +138,23 @@ class ASRService {
             return
         }
 
-        const frame = this._buildFrame(2, 0, chunk)
+        let flags = 0
+        if (this._needFirst) {
+            flags = 2
+            this._needFirst = false
+            this._segmentCount++
+            console.log('[ASR] Segment', this._segmentCount, 'started (FIRST)')
+        }
+        const frame = this._buildFrame(2, flags, chunk)
         this.ws.send(frame)
     }
 
     endSegment() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            console.log('[ASR] Sending LAST_AUDIO')
+            console.log('[ASR] Segment', this._segmentCount, 'ended (LAST)')
             const frame = this._buildFrame(2, 1, '')
             this.ws.send(frame)
+            this._needFirst = true
         }
     }
 
