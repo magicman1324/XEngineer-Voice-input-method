@@ -152,16 +152,22 @@
     <script src="js/audio.js"></script>
     <script src="js/vad.js"></script>
     <script src="js/asr.js"></script>
-    <!-- PR-5~PR-6 scripts not yet loaded: translator.js, tts.js, ui.js, app.js -->
+    <script src="js/translator.js"></script>
+    <!-- PR-6~PR-7 scripts not yet loaded: tts.js, ui.js, app.js -->
     <script>
-        // PR-4 test harness: wire audio → VAD → ASR, log results to console
+        // PR-4+5 test harness: wire audio → VAD → ASR → Translator
         document.addEventListener('DOMContentLoaded', () => {
             const audio = new AudioService(CONFIG)
             const vad = new VAD(CONFIG)
             const asr = new ASRService(CONFIG)
+            const translator = new TranslatorService(CONFIG)
 
             const micBtn = document.getElementById('mic-btn')
             const dot = document.getElementById('recording-dot')
+            const sourceLang = CONFIG.languages.default.source
+            const targetLang = CONFIG.languages.default.target
+            document.getElementById('lang-source').innerText = sourceLang.toUpperCase()
+            document.getElementById('lang-target').innerText = targetLang.toUpperCase()
             let active = false
 
             // Wire audio → VAD (volume)
@@ -174,11 +180,18 @@
             vad.onSpeechStart = () => console.log('[Test] Speech started')
             vad.onSpeechEnd = () => { console.log('[Test] Speech ended'); asr.endSegment() }
 
-            // Wire ASR → console
+            // Wire ASR → Translator → target panel
             asr.onConnected = () => console.log('[Test] ASR connected, listening...')
-            asr.onFinalResult = (text) => {
+            asr.onFinalResult = async (text) => {
                 console.log('[Test] ASR result:', text)
                 document.getElementById('source-text').innerText = text
+                try {
+                    const translated = await translator.translate(text, sourceLang, targetLang)
+                    document.getElementById('target-text').innerText = translated || '(翻译失败)'
+                } catch (e) {
+                    console.warn('[Test] Translation failed:', e.message)
+                    document.getElementById('target-text').innerText = '(翻译失败: ' + e.message + ')'
+                }
             }
             asr.onError = (e) => console.error('[Test] ASR error:', e)
 
@@ -193,6 +206,7 @@
                     dot.classList.add('hidden')
                     document.getElementById('volume-bar').classList.add('hidden')
                     document.getElementById('source-text').innerText = '点击下方麦克风开始语音输入...'
+                    document.getElementById('target-text').innerHTML = '<span class="text-gray-300 dark:text-gray-600 text-sm">翻译结果将显示在这里</span>'
                     active = false
                     return
                 }
@@ -206,14 +220,15 @@
                     dot.classList.remove('hidden')
                     document.getElementById('volume-bar').classList.remove('hidden')
                     document.getElementById('source-text').innerText = ''
+                    document.getElementById('target-text').innerText = ''
                 } catch (err) {
                     console.error('[Test] Start failed:', err)
                 }
             })
 
             // Expose for debugging
-            window.__audio = audio; window.__vad = vad; window.__asr = asr
-            console.log('[Test] PR-4 harness ready')
+            window.__audio = audio; window.__vad = vad; window.__asr = asr; window.__translator = translator
+            console.log('[Test] PR-4+5 harness ready')
         })
     </script>
 </body>
