@@ -117,8 +117,7 @@ class ASRService {
                 result_type: 'single',
                 show_utterances: false,
                 vad: {
-                    vad_enable: true,
-                    end_window_size: 2000,
+                    vad_enable: false,
                 },
             },
         })
@@ -143,7 +142,7 @@ class ASRService {
     endSegment() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             console.log('[ASR] Sending LAST_AUDIO')
-            const frame = this._buildFrame(2, 2, '')
+            const frame = this._buildFrame(2, 1, '')
             this.ws.send(frame)
         }
     }
