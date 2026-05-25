@@ -10,6 +10,7 @@ const { WebSocketServer } = require('ws');
 const WebSocket = require('ws');
 const http = require('http');
 const https = require('https');
+const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: false });
 
 const APP_ID = '8012821088';
 const TOKEN = 'yKVyiACnoM69nmHXq8HVJsqz8ZOYVoWW';
@@ -108,31 +109,44 @@ const httpServer = http.createServer((req, res) => {
     req.on('end', () => {
         console.log('[Proxy] HTTP translate request, body:', body.substring(0, 80) + '...');
 
-        // Pass through the client's Authorization header
-        const upstreamReq = https.request(TRANSLATE_UPSTREAM, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': req.headers.authorization || ('Bearer ' + TOKEN),
-            },
-        }, (upstreamRes) => {
-            let data = '';
-            upstreamRes.on('data', (chunk) => { data += chunk; });
-            upstreamRes.on('end', () => {
-                console.log('[Proxy] HTTP translate response:', upstreamRes.statusCode, data.substring(0, 120));
-                res.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
-                res.end(data);
+        let retries = 0;
+        const maxRetries = 2;
+        const sendUpstream = () => {
+            const upstreamReq = https.request(TRANSLATE_UPSTREAM, {
+                method: 'POST',
+                agent: httpsAgent,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': req.headers.authorization || ('Bearer ' + TOKEN),
+                },
+            }, (upstreamRes) => {
+                let data = '';
+                upstreamRes.on('data', (chunk) => { data += chunk; });
+                upstreamRes.on('end', () => {
+                    console.log('[Proxy] HTTP translate response:', upstreamRes.statusCode, data.substring(0, 120));
+                    res.writeHead(upstreamRes.statusCode, { 'Content-Type': 'application/json' });
+                    res.end(data);
+                });
             });
-        });
 
-        upstreamReq.on('error', (err) => {
-            console.error('[Proxy] HTTP upstream error:', err.message);
-            res.writeHead(502);
-            res.end(JSON.stringify({ error: 'Upstream error: ' + err.message }));
-        });
+            upstreamReq.on('error', (err) => {
+                console.error('[Proxy] HTTP upstream error:', err.message);
+                if (retries < maxRetries) {
+                    retries++;
+                    console.log('[Proxy] Retrying (' + retries + '/' + maxRetries + ')...');
+                    sendUpstream();
+                } else {
+                    if (!res.headersSent) {
+                        res.writeHead(502);
+                        res.end(JSON.stringify({ error: 'Upstream error after ' + maxRetries + ' retries: ' + err.message }));
+                    }
+                }
+            });
 
-        upstreamReq.write(body);
-        upstreamReq.end();
+            upstreamReq.write(body);
+            upstreamReq.end();
+        };
+        sendUpstream();
     });
 });
 
